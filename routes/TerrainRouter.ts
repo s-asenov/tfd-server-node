@@ -8,6 +8,8 @@ import { getPlantsFromZone } from "../src/PlantsRetriever";
 import axios from "axios";
 import { DZone, IDZone } from "../models/DistributionZone";
 import { IPlant } from "../models/Plant";
+import saveZonesInDB from "../src/services/ZoneUploader";
+import { TerrainKey } from "../models/TerrainKey";
 
 const router = Router();
 
@@ -35,47 +37,20 @@ router.post("/map", async (req, res) => {
 
   let zone: IDZone;
 
-  try {
-    const request = await axios.get(
-      `http://api.geonames.org/countrySubdivisionJSON?lat=${body.lat}&lng=${body.lng}&username=${process.env.GEONAMES_API}`
-    );
+  const request = await axios.get(
+    `http://api.geonames.org/countrySubdivisionJSON?lat=${body.lat}&lng=${body.lng}&username=${process.env.GEONAMES_API}`
+  );
 
-    if (request.data.adminName1) {
-      // zone = await DZone.findOne({ name: request.data.adminName1 });
-      zone = await DZone.findOneAndUpdate(
-        { name: request.data.adminName1 },
-        {
-          $inc: {
-            fetched: 1,
-          },
-          _id: 68,
-        },
-        {
-          upsert: true,
-          new: true,
-          setDefaultsOnInsert: true,
-          useFindAndModify: false,
-        }
-      );
-    } else {
-      zone = await DZone.findOneAndUpdate(
-        { name: request.data.countryName },
-        {
-          $inc: {
-            fetched: 1,
-          },
-        },
-        {
-          upsert: true,
-          new: true,
-          setDefaultsOnInsert: true,
-          useFindAndModify: false,
-        }
-      );
-    }
-  } catch (err) {
-    console.log(err);
+  if (request.data.adminName1) {
+    zone = await DZone.findOne({ name: request.data.adminName1 });
   }
+
+  if (zone === null) {
+    zone = await DZone.findOne({ name: request.data.countryName });
+  }
+
+  zone.fetched += 1;
+  await zone.save();
 
   let plants: Array<IPlant>;
 
@@ -130,6 +105,33 @@ router.get("/terrains", async (req, res) => {
     res.json(terrains);
   } catch (err) {
     res.json(err);
+  }
+});
+
+router.post("/upload-zones", async (req, res) => {
+  try {
+    await saveZonesInDB();
+
+    res.json("success");
+  } catch (err) {
+    res.json(err);
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  try {
+    let terrain = await Terrain.findById(req.params.id);
+
+    let terrainKeys = await TerrainKey.find({ terrain: terrain });
+
+    await terrain.delete();
+    await TerrainKey.deleteMany(terrainKeys);
+
+    res.json("Success!");
+  } catch (err) {
+    console.log(err);
+
+    res.send(404);
   }
 });
 

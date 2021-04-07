@@ -24,7 +24,7 @@ const TerrainSchema = new mongoose.Schema({
     unique: true,
   },
   user: {
-    type: mongoose.SchemaTypes.ObjectId,
+    type: mongoose.Schema.Types.ObjectId,
     ref: "User",
   },
 });
